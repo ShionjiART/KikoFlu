@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:real_liquid_glass/real_liquid_glass.dart';
@@ -28,7 +30,13 @@ class _MainScreenState extends ConsumerState<MainScreen> {
 
   // 使用 PageStorageBucket 来保存页面状态
   final PageStorageBucket _bucket = PageStorageBucket();
+  // 在不同布局之间切换（旋转、折叠屏展开/合上）时保留各页面的状态
+  final GlobalKey _pagesKey = GlobalKey();
   final ValueNotifier<double> _liquidDockExtent = ValueNotifier(0);
+
+  // iPhone Duo 的竖状态栏（时间、Wi-Fi）在机身一侧，系统把它作为约 84pt 的
+  // 左侧或右侧安全区。普通 iPhone 横屏时灵动岛一侧约 60pt，不会被误判。
+  static const double _minVerticalStatusBarWidth = 72;
 
   late final List<Widget> _screens;
 
@@ -96,60 +104,97 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     }
   }
 
+  /// 竖状态栏所在的一侧和宽度；没有竖状态栏（或设备旋转后状态栏到了顶部）时返回 null。
+  ({bool onLeft, double width})? _verticalStatusBar(BuildContext context) {
+    if (!Platform.isIOS) return null;
+    final padding = MediaQuery.viewPaddingOf(context);
+    if (padding.right >= _minVerticalStatusBarWidth) {
+      return (onLeft: false, width: padding.right);
+    }
+    if (padding.left >= _minVerticalStatusBarWidth) {
+      return (onLeft: true, width: padding.left);
+    }
+    return null;
+  }
+
+  Widget _buildPages() {
+    return KeyedSubtree(
+      key: _pagesKey,
+      child: PageStorage(
+        bucket: _bucket,
+        child: IndexedStack(
+          index: _currentIndex,
+          children: List.generate(_screens.length, (index) {
+            return HeroMode(
+              enabled: index == _currentIndex,
+              child: _screens[index],
+            );
+          }),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isLandscape =
         MediaQuery.of(context).orientation == Orientation.landscape;
+    final statusBar = _verticalStatusBar(context);
     final showUpdateBadge = ref.watch(showUpdateRedDotProvider);
     final useLiquidGlass = ref.watch(liquidGlassNavigationProvider);
     final destinations = _buildDestinations(context, showUpdateBadge);
 
-    if (isLandscape) {
-      // 横屏布局：使用 NavigationRail
+    if (isLandscape || statusBar != null) {
+      // 横屏布局：使用 NavigationRail。
+      // 有竖状态栏时（iPhone Duo），导航放进状态栏、Wi-Fi 图标下面。
       final landscapeScaffold = Scaffold(
         body: Stack(
           children: [
             // 主内容区域
             Row(
               children: [
-                // 侧边导航栏
-                SafeArea(
-                  child: SingleChildScrollView(
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        minHeight: MediaQuery.of(context).size.height -
-                            MediaQuery.of(context).padding.top -
-                            MediaQuery.of(context).padding.bottom,
-                      ),
-                      child: IntrinsicHeight(
-                        child: Padding(
-                          padding: useLiquidGlass
-                              ? const EdgeInsets.all(8)
-                              : EdgeInsets.zero,
-                          child: useLiquidGlass
-                              ? Consumer(
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(28),
-                                    child: _buildNavigationRail(destinations),
-                                  ),
-                                  builder: (context, ref, child) {
-                                    return LiquidGlassContainer(
-                                      shape: const LiquidGlassShape
-                                          .roundedRectangle(28),
-                                      fallbackIntensity: ref.watch(
-                                        fallbackGlassTransparencyProvider,
-                                      ),
-                                      child: child,
-                                    );
-                                  },
-                                )
-                              : _buildNavigationRail(destinations),
+                if (statusBar != null && statusBar.onLeft)
+                  _buildStatusBarNavigationRail(destinations, statusBar.width),
+                if (statusBar == null) ...[
+                  // 侧边导航栏
+                  SafeArea(
+                    child: SingleChildScrollView(
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          minHeight: MediaQuery.of(context).size.height -
+                              MediaQuery.of(context).padding.top -
+                              MediaQuery.of(context).padding.bottom,
+                        ),
+                        child: IntrinsicHeight(
+                          child: Padding(
+                            padding: useLiquidGlass
+                                ? const EdgeInsets.all(8)
+                                : EdgeInsets.zero,
+                            child: useLiquidGlass
+                                ? Consumer(
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(28),
+                                      child: _buildNavigationRail(destinations),
+                                    ),
+                                    builder: (context, ref, child) {
+                                      return LiquidGlassContainer(
+                                        shape: const LiquidGlassShape
+                                            .roundedRectangle(28),
+                                        fallbackIntensity: ref.watch(
+                                          fallbackGlassTransparencyProvider,
+                                        ),
+                                        child: child,
+                                      );
+                                    },
+                                  )
+                                : _buildNavigationRail(destinations),
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-                const VerticalDivider(thickness: 1, width: 1),
+                  const VerticalDivider(thickness: 1, width: 1),
+                ],
                 // 页面内容
                 Expanded(
                   child: Consumer(
@@ -159,18 +204,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
                           !authState.isLoggedIn &&
                           authState.error != null;
 
-                      final pages = PageStorage(
-                        bucket: _bucket,
-                        child: IndexedStack(
-                          index: _currentIndex,
-                          children: List.generate(_screens.length, (index) {
-                            return HeroMode(
-                              enabled: index == _currentIndex,
-                              child: _screens[index],
-                            );
-                          }),
-                        ),
-                      );
+                      final pages = _buildPages();
                       final miniPlayer = Consumer(
                         builder: (context, ref, child) {
                           final currentTrack = ref.watch(currentTrackProvider);
@@ -206,7 +240,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
                               ],
                             );
 
-                      return Padding(
+                      final paddedContent = Padding(
                         padding: EdgeInsets.only(top: isOfflineMode ? 30 : 0),
                         child: SafeArea(
                           top: false,
@@ -214,9 +248,20 @@ class _MainScreenState extends ConsumerState<MainScreen> {
                           child: content,
                         ),
                       );
+                      // 状态栏那一侧的安全区由导航占用，内容区不再重复留出
+                      return statusBar == null
+                          ? paddedContent
+                          : MediaQuery.removePadding(
+                              context: context,
+                              removeLeft: statusBar.onLeft,
+                              removeRight: !statusBar.onLeft,
+                              child: paddedContent,
+                            );
                     },
                   ),
                 ),
+                if (statusBar != null && !statusBar.onLeft)
+                  _buildStatusBarNavigationRail(destinations, statusBar.width),
               ],
             ),
             // 离线模式提示横幅（覆盖在顶部）
@@ -346,18 +391,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
                   top: false,
                   bottom: false,
                   child: LiquidGlassDockMediaQuery(
-                    child: PageStorage(
-                      bucket: _bucket,
-                      child: IndexedStack(
-                        index: _currentIndex,
-                        children: List.generate(_screens.length, (index) {
-                          return HeroMode(
-                            enabled: index == _currentIndex,
-                            child: _screens[index],
-                          );
-                        }),
-                      ),
-                    ),
+                    child: _buildPages(),
                   ),
                 ),
               );
@@ -445,6 +479,39 @@ class _MainScreenState extends ConsumerState<MainScreen> {
             child: portraitScaffold,
           )
         : portraitScaffold;
+  }
+
+  /// iPhone Duo：导航竖排在侧边状态栏中，宽度等于状态栏，垂直居中，
+  /// 落在时间和 Wi-Fi 图标下方，和系统 app 的做法一致。
+  Widget _buildStatusBarNavigationRail(
+    List<NavigationDestination> destinations,
+    double width,
+  ) {
+    return SizedBox(
+      width: width,
+      child: MediaQuery.removePadding(
+        context: context,
+        removeLeft: true,
+        removeTop: true,
+        removeRight: true,
+        removeBottom: true,
+        child: NavigationRail(
+          selectedIndex: _currentIndex,
+          onDestinationSelected: _handleDestinationSelected,
+          minWidth: width,
+          groupAlignment: 0.0,
+          backgroundColor: Colors.transparent,
+          labelType: NavigationRailLabelType.selected,
+          destinations: destinations
+              .map((dest) => NavigationRailDestination(
+                    icon: dest.icon,
+                    selectedIcon: dest.selectedIcon,
+                    label: Text(dest.label),
+                  ))
+              .toList(),
+        ),
+      ),
+    );
   }
 
   Widget _buildNavigationRail(List<NavigationDestination> destinations) {
