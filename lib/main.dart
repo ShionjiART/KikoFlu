@@ -33,6 +33,7 @@ import 'src/services/audio_player_service.dart';
 import 'src/services/native_tab_bar_service.dart';
 import 'src/services/playback_history_service.dart';
 import 'src/services/platform_appearance_service.dart';
+import 'src/services/system_bar_region.dart';
 import 'src/models/work.dart';
 import 'l10n/app_localizations.dart';
 import 'src/providers/audio_provider.dart';
@@ -354,9 +355,13 @@ void main(List<String> args) async {
 
   // iPhone (iOS 26+) hosts the app in a native Liquid Glass tab bar.
   await NativeTabBarService.initialize();
+  // iPhone Duo: where top bars fit inside the top status bar.
+  SystemBarRegion.initialize();
 
   runZonedGuarded(
-    () => runApp(const ProviderScope(child: KikoeruApp())),
+    () => runApp(
+      ProviderScope(child: SystemBarRegion(child: const KikoeruApp())),
+    ),
     (error, stack) {
       LogService.instance.error('$error\n$stack', tag: 'Zone');
     },

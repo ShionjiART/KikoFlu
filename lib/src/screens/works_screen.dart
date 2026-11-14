@@ -253,7 +253,7 @@ class _WorksScreenState extends ConsumerState<WorksScreen>
             ),
             Positioned(
               top: toolbarTop,
-              left: horizontalPadding,
+              left: statusBarSlot?.left ?? horizontalPadding,
               right: statusBarSlot?.right ?? horizontalPadding,
               child: FloatingFeedToolbar(
                 collapseModesWhenNeeded: false,
