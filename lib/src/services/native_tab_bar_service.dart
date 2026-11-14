@@ -22,7 +22,11 @@ class NativeTabBarService {
   static bool _isActive = false;
   static bool get isActive => _isActive;
 
-  static ValueChanged<int>? _onSelect;
+  // Main screens that want the tab bar, oldest first; the last one drives it.
+  // Signing in briefly builds two main screens (the pushed route and the
+  // rebuilt home route), and either may be disposed first, so when the
+  // driving screen goes away the previous one takes over again.
+  static final List<_TabBarOwner> _owners = [];
 
   static bool? _lastHidden;
   static int? _lastIndex;
@@ -44,23 +48,58 @@ class NativeTabBarService {
     if (!_isActive) return;
     _channel.setMethodCallHandler((call) async {
       if (call.method == 'select' && call.arguments is int) {
-        _lastIndex = call.arguments as int;
-        _onSelect?.call(_lastIndex!);
+        final index = call.arguments as int;
+        _lastIndex = index;
+        final owner = _owners.isEmpty ? null : _owners.last;
+        owner?.index = index;
+        owner?.onSelect(index);
       }
     });
   }
 
-  /// Receives the tab the user picked in the native tab bar.
-  static set onSelect(ValueChanged<int>? callback) => _onSelect = callback;
-
-  static void setSelectedIndex(int index) {
-    if (!_isActive || _lastIndex == index) return;
-    _lastIndex = index;
-    _invoke('setSelectedIndex', index);
+  /// Lets [owner] drive the tab bar, showing [index] as selected, and sends
+  /// it the tabs the user picks until it calls [detach].
+  static void attach(Object owner, ValueChanged<int> onSelect, int index) {
+    _owners.removeWhere((o) => identical(o.owner, owner));
+    _owners.add(_TabBarOwner(owner, onSelect, index));
+    _apply();
   }
 
-  static void setTabBarHidden(bool hidden) {
-    if (!_isActive || _lastHidden == hidden) return;
+  /// Hands the tab bar back to the previous main screen, or hides it when
+  /// none is left.
+  static void detach(Object owner) {
+    _owners.removeWhere((o) => identical(o.owner, owner));
+    _apply();
+  }
+
+  static void setTabBarHidden(Object owner, bool hidden) {
+    _ownerEntry(owner)?.hidden = hidden;
+    _apply();
+  }
+
+  static _TabBarOwner? _ownerEntry(Object owner) {
+    for (final o in _owners) {
+      if (identical(o.owner, owner)) return o;
+    }
+    return null;
+  }
+
+  static void _apply() {
+    if (!_isActive) return;
+    if (_owners.isEmpty) {
+      _sendHidden(true);
+      return;
+    }
+    final current = _owners.last;
+    if (_lastIndex != current.index) {
+      _lastIndex = current.index;
+      _invoke('setSelectedIndex', current.index);
+    }
+    _sendHidden(current.hidden);
+  }
+
+  static void _sendHidden(bool hidden) {
+    if (_lastHidden == hidden) return;
     _lastHidden = hidden;
     _invoke('setTabBarHidden', hidden);
   }
@@ -84,4 +123,15 @@ class NativeTabBarService {
       debugPrint('Native tab bar $method failed: ${e.message}');
     }
   }
+}
+
+class _TabBarOwner {
+  _TabBarOwner(this.owner, this.onSelect, this.index);
+
+  final Object owner;
+  final ValueChanged<int> onSelect;
+  int index;
+
+  /// Hidden while a page is pushed on top of this main screen.
+  bool hidden = false;
 }

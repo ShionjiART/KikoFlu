@@ -52,8 +52,8 @@ class _MainScreenState extends ConsumerState<MainScreen> with RouteAware {
       SettingsScreen(key: PageStorageKey('settings_screen')),
     ];
     if (NativeTabBarService.isActive) {
-      NativeTabBarService.onSelect = _handleDestinationSelected;
-      NativeTabBarService.setSelectedIndex(_currentIndex);
+      NativeTabBarService.attach(
+          this, _handleDestinationSelected, _currentIndex);
     }
   }
 
@@ -70,8 +70,7 @@ class _MainScreenState extends ConsumerState<MainScreen> with RouteAware {
   void dispose() {
     if (NativeTabBarService.isActive) {
       NativeTabBarService.routeObserver.unsubscribe(this);
-      NativeTabBarService.onSelect = null;
-      NativeTabBarService.setTabBarHidden(true);
+      NativeTabBarService.detach(this);
     }
     _liquidDockExtent.dispose();
     super.dispose();
@@ -79,13 +78,16 @@ class _MainScreenState extends ConsumerState<MainScreen> with RouteAware {
 
   // 原生标签栏只在主界面显示，进入作品详情、播放器等页面时收起
   @override
-  void didPush() => NativeTabBarService.setTabBarHidden(false);
+  void didPush() => _setNativeTabBarHidden(false);
 
   @override
-  void didPopNext() => NativeTabBarService.setTabBarHidden(false);
+  void didPopNext() => _setNativeTabBarHidden(false);
 
   @override
-  void didPushNext() => NativeTabBarService.setTabBarHidden(true);
+  void didPushNext() => _setNativeTabBarHidden(true);
+
+  void _setNativeTabBarHidden(bool hidden) =>
+      NativeTabBarService.setTabBarHidden(this, hidden);
 
   List<NavigationDestination> _buildDestinations(
       BuildContext context, bool showUpdateBadge) {
