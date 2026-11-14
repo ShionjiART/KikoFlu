@@ -43,10 +43,15 @@ class FloatingFeedToolbar extends StatelessWidget {
     required this.modeActions,
     required this.toolActions,
     this.collapseModesWhenNeeded = true,
+    this.alignToStart = false,
   }) : assert(modeActions.length > 0);
 
   final List<FloatingFeedModeAction> modeActions;
   final List<FloatingFeedToolAction> toolActions;
+
+  /// Keeps the tool capsule next to the mode capsule instead of pushing it to
+  /// the far edge, e.g. when the trailing corner holds the status bar items.
+  final bool alignToStart;
 
   /// Replaces the mode row with a dropdown when it cannot fit beside tools.
   ///
@@ -58,7 +63,7 @@ class FloatingFeedToolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final toolbar = SizedBox(
-      height: 48,
+      height: FloatingToolbarLayout.toolbarHeight,
       child: LayoutBuilder(
         builder: (context, constraints) {
           const surfacePadding = 8.0;
@@ -119,7 +124,9 @@ class FloatingFeedToolbar extends StatelessWidget {
           );
 
           return Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            mainAxisAlignment: alignToStart
+                ? MainAxisAlignment.start
+                : MainAxisAlignment.spaceBetween,
             children: [
               Flexible(fit: FlexFit.loose, child: modeSurface),
               if (toolActions.isNotEmpty) ...[
@@ -381,6 +388,26 @@ class _ModeDropdown extends ConsumerWidget {
 /// left and right edges across tabs and nested toolbars.
 class FloatingToolbarLayout {
   const FloatingToolbarLayout._();
+
+  /// Height of [FloatingFeedToolbar].
+  static const double toolbarHeight = 48;
+
+  // iPhone Duo held upright while unfolded puts its status bar across the top
+  // as an ~82pt safe area, with time and Wi-Fi only in the top-right corner.
+  // Slab iPhones have a portrait top inset of about 60pt.
+  static const double _minTopStatusBarHeight = 72;
+  // Room kept clear for the time and Wi-Fi, including a 12-hour clock.
+  static const double _statusItemsReservedWidth = 160;
+
+  /// Where a top toolbar goes when it sits inside that status bar: vertically
+  /// centred in it, with its right edge kept clear of the status items.
+  /// Returns null on other devices, where the toolbar stays below the inset.
+  static ({double top, double right})? topStatusBarSlot(BuildContext context) {
+    if (defaultTargetPlatform != TargetPlatform.iOS) return null;
+    final top = MediaQuery.viewPaddingOf(context).top;
+    if (top < _minTopStatusBarHeight) return null;
+    return (top: (top - toolbarHeight) / 2, right: _statusItemsReservedWidth);
+  }
 
   static double horizontalPadding(BuildContext context) {
     return ResponsiveGridHelper.isTabletLayout(context)
