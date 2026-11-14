@@ -318,6 +318,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
           height: _searchTypeSelectorHeight,
         ) !=
         null;
+    // 有竖状态栏时右上角紧挨着它，筛选按钮改放到搜索类型那一行的右侧
+    final filterBesideSearchTypes = searchTypesInStatusBar ||
+        FloatingToolbarLayout.hasVerticalStatusBar(context);
     return GestureDetector(
       // 点击任何地方（包括 AppBar）都取消焦点，关闭下拉框
       onTap: () {
@@ -346,10 +349,11 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
                 clipBehavior: Clip.none,
                 actions: [
                   // 筛选按钮移到右上角
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: _buildFilterButton(),
-                  ),
+                  if (!filterBesideSearchTypes)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: _buildFilterButton(),
+                    ),
                 ],
               ),
         resizeToAvoidBottomInset: true, // 自动调整以避免键盘遮挡
@@ -378,6 +382,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
                               children: _buildMainContentChildren(
                                 true,
                                 showSearchTypes: !searchTypesInStatusBar,
+                                filterBesideSearchTypes:
+                                    filterBesideSearchTypes,
                               ),
                             ),
                           ),
@@ -400,6 +406,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
                       children: _buildMainContentChildren(
                         false,
                         showSearchTypes: !searchTypesInStatusBar,
+                        filterBesideSearchTypes: filterBesideSearchTypes,
                       ),
                     ),
                   ),
@@ -507,6 +514,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
   List<Widget> _buildMainContentChildren(
     bool isLandscape, {
     bool showSearchTypes = true,
+    bool filterBesideSearchTypes = false,
   }) {
     final theme = Theme.of(context);
 
@@ -555,7 +563,21 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
         ),
         const SizedBox(height: 12),
       ],
-      if (showSearchTypes) _buildSearchTypeSelector(theme),
+      if (showSearchTypes && filterBesideSearchTypes)
+        Row(
+          children: [
+            Expanded(
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: _buildSearchTypeSelector(theme),
+              ),
+            ),
+            const SizedBox(width: 8),
+            _buildFilterButton(),
+          ],
+        )
+      else if (showSearchTypes)
+        _buildSearchTypeSelector(theme),
       if (_currentSearchType == SearchType.tag ||
           _currentSearchType == SearchType.va ||
           _currentSearchType == SearchType.circle)

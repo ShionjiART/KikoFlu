@@ -361,7 +361,7 @@ class _MyScreenState extends ConsumerState<MyScreen>
               ),
               Positioned(
                 top: tabSwitcherTop,
-                left: horizontalPadding,
+                left: statusBarSlot?.left ?? horizontalPadding,
                 right: statusBarSlot?.right ?? horizontalPadding,
                 child: ValueListenableBuilder<bool>(
                   valueListenable: _tabSwitcherVisible,

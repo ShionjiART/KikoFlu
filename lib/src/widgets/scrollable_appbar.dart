@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'floating_feed_toolbar.dart';
+import 'top_status_bar_app_bar.dart';
 
 /// 可滚动 AppBar - 默认不显示分隔线，滚动时显示
 class ScrollableAppBar extends StatefulWidget implements PreferredSizeWidget {
@@ -138,29 +138,12 @@ class _ScrollableAppBarState extends State<ScrollableAppBar> {
     );
 
     // iPhone Duo 展开竖拿时，标题栏放进顶部状态栏，右侧让出时间和 Wi-Fi
-    final slot = FloatingToolbarLayout.topStatusBarSlot(
+    return TopStatusBarAppBar.wrap(
       context,
-      height: widget.toolbarHeight,
-    );
-    if (slot == null) return appBar;
-    final mediaQuery = MediaQuery.of(context);
-    EdgeInsets inStatusBar(EdgeInsets padding) => padding.copyWith(
-          top: slot.top,
-          right: padding.right > slot.right ? padding.right : slot.right,
-        );
-    // Scaffold reserves the full inset above the bar; the fixed height lets
-    // the page start right below the bar instead.
-    return SizedBox(
-      height: slot.top +
-          widget.toolbarHeight +
-          (widget.bottom?.preferredSize.height ?? 1),
-      child: MediaQuery(
-        data: mediaQuery.copyWith(
-          padding: inStatusBar(mediaQuery.padding),
-          viewPadding: inStatusBar(mediaQuery.viewPadding),
-        ),
-        child: appBar,
-      ),
+      appBar,
+      toolbarHeight: widget.toolbarHeight,
+      height:
+          widget.toolbarHeight + (widget.bottom?.preferredSize.height ?? 1),
     );
   }
 }
