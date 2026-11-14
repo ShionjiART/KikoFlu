@@ -396,17 +396,22 @@ class FloatingToolbarLayout {
   // as an ~82pt safe area, with time and Wi-Fi only in the top-right corner.
   // Slab iPhones have a portrait top inset of about 60pt.
   static const double _minTopStatusBarHeight = 72;
-  // Room kept clear for the time and Wi-Fi, including a 12-hour clock.
-  static const double _statusItemsReservedWidth = 160;
+  // Room kept clear for the time and Wi-Fi, which start about 120pt from the
+  // right edge.
+  static const double _statusItemsReservedWidth = 140;
 
-  /// Where a top toolbar goes when it sits inside that status bar: vertically
-  /// centred in it, with its right edge kept clear of the status items.
-  /// Returns null on other devices, where the toolbar stays below the inset.
-  static ({double top, double right})? topStatusBarSlot(BuildContext context) {
+  /// Where a top bar of [height] goes when it sits inside that status bar:
+  /// vertically centred in it, with its right edge kept clear of the status
+  /// items. Returns null on other devices, and where the top inset has already
+  /// been consumed, so the bar stays below the inset.
+  static ({double top, double right})? topStatusBarSlot(
+    BuildContext context, {
+    double height = toolbarHeight,
+  }) {
     if (defaultTargetPlatform != TargetPlatform.iOS) return null;
-    final top = MediaQuery.viewPaddingOf(context).top;
+    final top = MediaQuery.paddingOf(context).top;
     if (top < _minTopStatusBarHeight) return null;
-    return (top: (top - toolbarHeight) / 2, right: _statusItemsReservedWidth);
+    return (top: (top - height) / 2, right: _statusItemsReservedWidth);
   }
 
   static double horizontalPadding(BuildContext context) {
