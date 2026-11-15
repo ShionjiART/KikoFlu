@@ -285,9 +285,10 @@ class _MyScreenState extends ConsumerState<MyScreen>
     final topPadding = MediaQuery.paddingOf(context).top;
     final horizontalPadding = FloatingToolbarLayout.horizontalPadding(context);
     // iPhone Duo 展开竖拿时，标签切换条放进顶部状态栏左侧，下面的内容整体上移
+    // 切换条外面还有 FloatingToolbarSurface 上下各 4 的内边距，按实际高度居中
     final statusBarSlot = FloatingToolbarLayout.topStatusBarSlot(
       context,
-      height: _tabSwitcherHeight,
+      height: _tabSwitcherHeight + 8,
     );
     _tabSwitcherInStatusBar = statusBarSlot != null;
     if (_tabSwitcherInStatusBar && !_tabSwitcherVisible.value) {
