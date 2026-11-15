@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:real_liquid_glass/real_liquid_glass.dart';
 
 import '../providers/settings_provider.dart';
-import '../services/system_bar_region.dart';
+import '../services/duo_layout.dart';
 import '../utils/responsive_grid_helper.dart';
 
 class FloatingFeedModeAction {
@@ -395,42 +395,30 @@ class FloatingToolbarLayout {
   /// Height of [FloatingFeedToolbar].
   static const double toolbarHeight = 48;
 
-  // Below this a side inset is a notch or Dynamic Island, not iPhone Duo's
-  // vertical status bar (about 84pt).
-  static const double _minSideStatusBarWidth = 72;
-
   /// Where a top bar of [height] goes when the system lets it sit inside the
   /// top safe area, as on iPhone Duo held upright while unfolded: UIKit's top
-  /// bar region places it in the status bar, clear of the time and Wi-Fi.
-  /// Returns null elsewhere, and where the top inset has already been
-  /// consumed, so the bar stays below the inset.
+  /// bar region places it in the status bar row, clear of the time and
+  /// Wi-Fi. Returns null elsewhere (a vertical bar, other devices), and where
+  /// the top inset has already been consumed, so the bar stays below it.
   static ({double top, double left, double right})? topStatusBarSlot(
     BuildContext context, {
     double height = toolbarHeight,
   }) {
-    final region = SystemBarRegion.topBarOf(context);
-    if (region == null) return null;
+    final layout = DuoLayout.of(context);
+    final region = layout?.topBar;
+    if (region == null || layout!.hasVerticalBar) return null;
     // UIKit centres shorter bars on the status bar row and never places a
     // taller one above the region's top (44pt: 26, 48pt: 24, 56pt: 24).
-    final centre = region.top + TopBarRegion.measuredExtent / 2;
+    final centre = region.top + DuoLayoutData.barExtent / 2;
     final top = math.max(region.top, centre - height / 2);
     if (top + height > MediaQuery.paddingOf(context).top) return null;
     return (top: top, left: region.left, right: region.right);
   }
 
-  /// Whether iPhone Duo's status bar runs down one side of the window, as it
-  /// does when the phone is held sideways, folded or unfolded. Top-right
-  /// controls then sit in a cramped corner beside it.
-  static bool hasVerticalStatusBar(BuildContext context) {
-    if (defaultTargetPlatform != TargetPlatform.iOS) return false;
-    // The main screen consumes the side insets (and with them viewPadding),
-    // so read the window's own; the size lookup rebuilds on rotation.
-    MediaQuery.sizeOf(context);
-    final view = View.of(context);
-    final padding = view.viewPadding;
-    final minWidth = _minSideStatusBarWidth * view.devicePixelRatio;
-    return padding.left >= minWidth || padding.right >= minWidth;
-  }
+  /// Whether iPhone Duo puts bars in a vertical bar beside the content, as it
+  /// does when folded or held sideways.
+  static bool hasVerticalBar(BuildContext context) =>
+      DuoLayout.of(context)?.hasVerticalBar ?? false;
 
   static double horizontalPadding(BuildContext context) {
     return ResponsiveGridHelper.isTabletLayout(context)

@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:real_liquid_glass/real_liquid_glass.dart';
@@ -16,6 +14,7 @@ import 'search_screen.dart';
 import 'my_screen.dart';
 import 'settings_screen.dart';
 import '../providers/settings_provider.dart';
+import '../services/duo_layout.dart';
 import '../services/native_tab_bar_service.dart';
 import '../widgets/offline_banner_inset.dart';
 import '../utils/responsive_grid_helper.dart';
@@ -33,13 +32,7 @@ class _MainScreenState extends ConsumerState<MainScreen> with RouteAware {
 
   // 使用 PageStorageBucket 来保存页面状态
   final PageStorageBucket _bucket = PageStorageBucket();
-  // 在不同布局之间切换（旋转、折叠屏展开/合上）时保留各页面的状态
-  final GlobalKey _pagesKey = GlobalKey();
   final ValueNotifier<double> _liquidDockExtent = ValueNotifier(0);
-
-  // iPhone Duo 的竖状态栏（时间、Wi-Fi）在机身一侧，系统把它作为约 84pt 的
-  // 左侧或右侧安全区。普通 iPhone 横屏时灵动岛一侧约 60pt，不会被误判。
-  static const double _minVerticalStatusBarWidth = 72;
 
   late final List<Widget> _screens;
 
@@ -137,33 +130,17 @@ class _MainScreenState extends ConsumerState<MainScreen> with RouteAware {
     }
   }
 
-  /// 竖状态栏所在的一侧和宽度；没有竖状态栏（或设备旋转后状态栏到了顶部）时返回 null。
-  ({bool onLeft, double width})? _verticalStatusBar(BuildContext context) {
-    if (!Platform.isIOS) return null;
-    final padding = MediaQuery.viewPaddingOf(context);
-    if (padding.right >= _minVerticalStatusBarWidth) {
-      return (onLeft: false, width: padding.right);
-    }
-    if (padding.left >= _minVerticalStatusBarWidth) {
-      return (onLeft: true, width: padding.left);
-    }
-    return null;
-  }
-
   Widget _buildPages() {
-    return KeyedSubtree(
-      key: _pagesKey,
-      child: PageStorage(
-        bucket: _bucket,
-        child: IndexedStack(
-          index: _currentIndex,
-          children: List.generate(_screens.length, (index) {
-            return HeroMode(
-              enabled: index == _currentIndex,
-              child: _screens[index],
-            );
-          }),
-        ),
+    return PageStorage(
+      bucket: _bucket,
+      child: IndexedStack(
+        index: _currentIndex,
+        children: List.generate(_screens.length, (index) {
+          return HeroMode(
+            enabled: index == _currentIndex,
+            child: _screens[index],
+          );
+        }),
       ),
     );
   }
@@ -171,7 +148,6 @@ class _MainScreenState extends ConsumerState<MainScreen> with RouteAware {
   @override
   Widget build(BuildContext context) {
     final isTabletLayout = ResponsiveGridHelper.isTabletLayout(context);
-    final statusBar = _verticalStatusBar(context);
     final showUpdateBadge = ref.watch(showUpdateRedDotProvider);
     final useLiquidGlass = ref.watch(liquidGlassNavigationProvider);
     final destinations = _buildDestinations(context, showUpdateBadge);
@@ -184,57 +160,52 @@ class _MainScreenState extends ConsumerState<MainScreen> with RouteAware {
       return _buildNativeTabBarLayout(context);
     }
 
-    if (isTabletLayout || statusBar != null) {
-      // 横屏或平板式布局：使用 NavigationRail。
-      // 有竖状态栏时（iPhone Duo），导航放进状态栏、Wi-Fi 图标下面。
+    if (isTabletLayout) {
+      // 横屏或平板式布局：使用 NavigationRail
       final landscapeScaffold = Scaffold(
         body: Stack(
           children: [
             // 主内容区域
             Row(
               children: [
-                if (statusBar != null && statusBar.onLeft)
-                  _buildStatusBarNavigationRail(destinations, statusBar.width),
-                if (statusBar == null) ...[
-                  // 侧边导航栏
-                  SafeArea(
-                    child: SingleChildScrollView(
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(
-                          minHeight: MediaQuery.of(context).size.height -
-                              MediaQuery.of(context).padding.top -
-                              MediaQuery.of(context).padding.bottom,
-                        ),
-                        child: IntrinsicHeight(
-                          child: Padding(
-                            padding: useLiquidGlass
-                                ? const EdgeInsets.all(8)
-                                : EdgeInsets.zero,
-                            child: useLiquidGlass
-                                ? Consumer(
-                                    child: ClipRRect(
-                                      borderRadius: BorderRadius.circular(28),
-                                      child: _buildNavigationRail(destinations),
-                                    ),
-                                    builder: (context, ref, child) {
-                                      return LiquidGlassContainer(
-                                        shape: const LiquidGlassShape
-                                            .roundedRectangle(28),
-                                        fallbackIntensity: ref.watch(
-                                          fallbackGlassTransparencyProvider,
-                                        ),
-                                        child: child,
-                                      );
-                                    },
-                                  )
-                                : _buildNavigationRail(destinations),
-                          ),
+                // 侧边导航栏
+                SafeArea(
+                  child: SingleChildScrollView(
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minHeight: MediaQuery.of(context).size.height -
+                            MediaQuery.of(context).padding.top -
+                            MediaQuery.of(context).padding.bottom,
+                      ),
+                      child: IntrinsicHeight(
+                        child: Padding(
+                          padding: useLiquidGlass
+                              ? const EdgeInsets.all(8)
+                              : EdgeInsets.zero,
+                          child: useLiquidGlass
+                              ? Consumer(
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(28),
+                                    child: _buildNavigationRail(destinations),
+                                  ),
+                                  builder: (context, ref, child) {
+                                    return LiquidGlassContainer(
+                                      shape: const LiquidGlassShape
+                                          .roundedRectangle(28),
+                                      fallbackIntensity: ref.watch(
+                                        fallbackGlassTransparencyProvider,
+                                      ),
+                                      child: child,
+                                    );
+                                  },
+                                )
+                              : _buildNavigationRail(destinations),
                         ),
                       ),
                     ),
                   ),
-                  const VerticalDivider(thickness: 1, width: 1),
-                ],
+                ),
+                const VerticalDivider(thickness: 1, width: 1),
                 // 页面内容
                 Expanded(
                   child: Consumer(
@@ -244,7 +215,18 @@ class _MainScreenState extends ConsumerState<MainScreen> with RouteAware {
                           !authState.isLoggedIn &&
                           authState.error != null;
 
-                      final pages = _buildPages();
+                      final pages = PageStorage(
+                        bucket: _bucket,
+                        child: IndexedStack(
+                          index: _currentIndex,
+                          children: List.generate(_screens.length, (index) {
+                            return HeroMode(
+                              enabled: index == _currentIndex,
+                              child: _screens[index],
+                            );
+                          }),
+                        ),
+                      );
                       final miniPlayer = Consumer(
                         builder: (context, ref, child) {
                           final currentTrack = ref.watch(currentTrackProvider);
@@ -280,7 +262,7 @@ class _MainScreenState extends ConsumerState<MainScreen> with RouteAware {
                               ],
                             );
 
-                      final paddedContent = OfflineBannerInset(
+                      return OfflineBannerInset(
                         offline: isOfflineMode,
                         child: SafeArea(
                           top: false,
@@ -288,20 +270,9 @@ class _MainScreenState extends ConsumerState<MainScreen> with RouteAware {
                           child: content,
                         ),
                       );
-                      // 状态栏那一侧的安全区由导航占用，内容区不再重复留出
-                      return statusBar == null
-                          ? paddedContent
-                          : MediaQuery.removePadding(
-                              context: context,
-                              removeLeft: statusBar.onLeft,
-                              removeRight: !statusBar.onLeft,
-                              child: paddedContent,
-                            );
                     },
                   ),
                 ),
-                if (statusBar != null && !statusBar.onLeft)
-                  _buildStatusBarNavigationRail(destinations, statusBar.width),
               ],
             ),
             // 离线模式提示横幅（覆盖在顶部）
@@ -368,7 +339,18 @@ class _MainScreenState extends ConsumerState<MainScreen> with RouteAware {
                   top: false,
                   bottom: false,
                   child: LiquidGlassDockMediaQuery(
-                    child: _buildPages(),
+                    child: PageStorage(
+                      bucket: _bucket,
+                      child: IndexedStack(
+                        index: _currentIndex,
+                        children: List.generate(_screens.length, (index) {
+                          return HeroMode(
+                            enabled: index == _currentIndex,
+                            child: _screens[index],
+                          );
+                        }),
+                      ),
+                    ),
                   ),
                 ),
               );
@@ -466,11 +448,15 @@ class _MainScreenState extends ConsumerState<MainScreen> with RouteAware {
   /// 迷你播放器。系统把标签栏占用的区域作为安全区告诉 Flutter：普通 iPhone
   /// 是底部，iPhone Duo 是侧边的竖状态栏。
   Widget _buildNativeTabBarLayout(BuildContext context) {
-    final viewPadding = MediaQuery.viewPaddingOf(context);
-    // 底部安全区明显超过 Home 指示条（约 34pt）时，说明标签栏在底部，
-    // 迷你播放器要浮在标签栏上方
-    final dockBottomInset = viewPadding.bottom > 40
-        ? viewPadding.bottom + 8
+    // 标签栏在底部时（普通 iPhone、iPhone Duo 展开竖拿），迷你播放器浮在它上方；
+    // 标签栏在侧边竖栏里时，迷你播放器铺在内容区底部
+    final windowHeight = MediaQuery.sizeOf(context).height;
+    final tabBar = DuoLayout.of(context)?.tabBar;
+    final tabBarAtBottom = tabBar != null &&
+        tabBar.width > tabBar.height &&
+        tabBar.bottom >= windowHeight - 1;
+    final dockBottomInset = tabBarAtBottom
+        ? windowHeight - tabBar.top + 8
         : LiquidGlassLayout.dockBottomInset(context);
 
     final miniPlayer = Consumer(
@@ -523,39 +509,6 @@ class _MainScreenState extends ConsumerState<MainScreen> with RouteAware {
             ),
             _buildOfflineBanner(),
           ],
-        ),
-      ),
-    );
-  }
-
-  /// iPhone Duo：导航竖排在侧边状态栏中，宽度等于状态栏，垂直居中，
-  /// 落在时间和 Wi-Fi 图标下方，和系统 app 的做法一致。
-  Widget _buildStatusBarNavigationRail(
-    List<NavigationDestination> destinations,
-    double width,
-  ) {
-    return SizedBox(
-      width: width,
-      child: MediaQuery.removePadding(
-        context: context,
-        removeLeft: true,
-        removeTop: true,
-        removeRight: true,
-        removeBottom: true,
-        child: NavigationRail(
-          selectedIndex: _currentIndex,
-          onDestinationSelected: _handleDestinationSelected,
-          minWidth: width,
-          groupAlignment: 0.0,
-          backgroundColor: Colors.transparent,
-          labelType: NavigationRailLabelType.selected,
-          destinations: destinations
-              .map((dest) => NavigationRailDestination(
-                    icon: dest.icon,
-                    selectedIcon: dest.selectedIcon,
-                    label: Text(dest.label),
-                  ))
-              .toList(),
         ),
       ),
     );

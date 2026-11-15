@@ -320,7 +320,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
         null;
     // 有竖状态栏时右上角紧挨着它，筛选按钮改放到搜索类型那一行的右侧
     final filterBesideSearchTypes = searchTypesInStatusBar ||
-        FloatingToolbarLayout.hasVerticalStatusBar(context);
+        FloatingToolbarLayout.hasVerticalBar(context);
     return GestureDetector(
       // 点击任何地方（包括 AppBar）都取消焦点，关闭下拉框
       onTap: () {
