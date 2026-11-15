@@ -10,7 +10,6 @@ import CoreHaptics
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   private var floatingLyricManager: FloatingLyricManager?
   private var audioHapticsBridge: AudioHapticsBridge?
-  private var systemBarRegion: SystemBarRegion?
 
   override func application(
     _ application: UIApplication,
@@ -32,9 +31,6 @@ import CoreHaptics
     let registry = engineBridge.pluginRegistry
     if let registrar = registry.registrar(forPlugin: "FloatingLyricManager") {
       floatingLyricManager = FloatingLyricManager(registrar: registrar)
-    }
-    if let registrar = registry.registrar(forPlugin: "SystemBarRegion") {
-      systemBarRegion = SystemBarRegion(registrar: registrar)
     }
     let messenger = engineBridge.applicationRegistrar.messenger()
     audioHapticsBridge = AudioHapticsBridge(messenger: messenger)
@@ -2631,62 +2627,4 @@ class FloatingLyricManager: NSObject, AVPictureInPictureControllerDelegate {
         stopMonitors()
         player?.pause()
     }
-}
-
-/// Tells Flutter where UIKit places a bar on the top edge of the Flutter view.
-/// On iPhone Duo held upright while unfolded, that region sits inside the top
-/// status bar and stops short of the time and Wi-Fi, which is where system
-/// apps put their top bars.
-final class SystemBarRegion {
-  private let registrar: FlutterPluginRegistrar
-  private let channel: FlutterMethodChannel
-
-  init(registrar: FlutterPluginRegistrar) {
-    self.registrar = registrar
-    channel = FlutterMethodChannel(
-      name: "com.meteor.kikoeruflutter/layout_regions",
-      binaryMessenger: registrar.messenger()
-    )
-    channel.setMethodCallHandler { [weak self] call, result in
-      guard call.method == "topBarRegion" else {
-        result(FlutterMethodNotImplemented)
-        return
-      }
-      let extent = (call.arguments as? Double).map { CGFloat($0) } ?? 48
-      result(self?.topBarRegion(extent: extent))
-    }
-  }
-
-  private func topBarRegion(extent: CGFloat) -> [String: Double]? {
-    guard let view = registrar.viewController?.viewIfLoaded,
-          let insets = Self.topBarInsets(in: view, extent: extent) else { return nil }
-    return [
-      "top": Double(insets.top),
-      "left": Double(insets.left),
-      "right": Double(insets.right),
-      "width": Double(view.bounds.width),
-      "height": Double(view.bounds.height),
-    ]
-  }
-
-  /// `view.edgeInsets(for: .bar(onEdge: .top, extent:))`, iOS 27.1+. Looked up
-  /// through the Objective-C runtime so the app still builds with SDKs that
-  /// predate the API (Xcode 26 and 27.0); elsewhere it returns nil.
-  private static func topBarInsets(in view: UIView, extent: CGFloat) -> UIEdgeInsets? {
-    let makeRegion = NSSelectorFromString("layoutRegionForBarOnEdge:extent:")
-    let insetsForRegion = NSSelectorFromString("edgeInsetsForLayoutRegion:")
-    guard let regionClass = NSClassFromString("UIViewLayoutRegion"),
-          let metaclass = object_getClass(regionClass),
-          class_respondsToSelector(metaclass, makeRegion),
-          view.responds(to: insetsForRegion) else { return nil }
-
-    typealias MakeRegion = @convention(c) (AnyClass, Selector, UInt, CGFloat) -> AnyObject
-    typealias InsetsForRegion = @convention(c) (UIView, Selector, AnyObject) -> UIEdgeInsets
-    let make = unsafeBitCast(
-      class_getMethodImplementation(metaclass, makeRegion), to: MakeRegion.self)
-    let insets = unsafeBitCast(
-      view.method(for: insetsForRegion), to: InsetsForRegion.self)
-    let region = make(regionClass, makeRegion, UIRectEdge.top.rawValue, extent)
-    return insets(view, insetsForRegion, region)
-  }
 }
