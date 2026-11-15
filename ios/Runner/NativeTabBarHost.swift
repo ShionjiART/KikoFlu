@@ -28,7 +28,7 @@ final class NativeTabBarHost: NSObject, UITabBarControllerDelegate {
   /// Called after the Flutter view moves into another tab's container.
   var onFlutterViewMoved: (() -> Void)?
 
-  let tabBarController = UITabBarController()
+  let tabBarController: UITabBarController = FlutterTabBarController()
   private let flutterController: FlutterViewController
   private let channel: FlutterMethodChannel
   private let containers: [FlutterTabContainer]
@@ -47,8 +47,11 @@ final class NativeTabBarHost: NSObject, UITabBarControllerDelegate {
       ("My", "heart", "heart.fill"),
       ("Settings", "gearshape", "gearshape.fill"),
     ]
+    // One flag per Flutter view: a scene that reconnects gets a new view
+    // controller, which must see its first appearance again.
+    let appearance = FlutterAppearanceState()
     containers = items.map { title, symbol, selectedSymbol in
-      let container = FlutterTabContainer()
+      let container = FlutterTabContainer(appearance: appearance)
       container.tabBarItem = UITabBarItem(
         title: title,
         image: UIImage(systemName: symbol),
@@ -134,27 +137,62 @@ final class NativeTabBarHost: NSObject, UITabBarControllerDelegate {
   }
 }
 
+/// Passes the home indicator and edge gesture questions to the selected tab,
+/// whose container passes them on to Flutter.
+private final class FlutterTabBarController: UITabBarController {
+  override var childForHomeIndicatorAutoHidden: UIViewController? { selectedViewController }
+
+  override var childForScreenEdgesDeferringSystemGestures: UIViewController? {
+    selectedViewController
+  }
+}
+
+/// Whether the hosted Flutter view controller has had its first appearance.
+private final class FlutterAppearanceState {
+  var hasAppeared = false
+}
+
 /// A tab's content view controller. It forwards appearance callbacks to the
 /// Flutter view controller only for the first appearance: later tab switches
 /// move the same, still visible Flutter view between containers, and
 /// forwarding them would report the app as inactive or paused on every tap.
 private final class FlutterTabContainer: UIViewController {
-  private static var flutterHasAppeared = false
+  private let appearance: FlutterAppearanceState
+
+  init(appearance: FlutterAppearanceState) {
+    self.appearance = appearance
+    super.init(nibName: nil, bundle: nil)
+  }
+
+  @available(*, unavailable)
+  required init?(coder: NSCoder) {
+    fatalError("init(coder:) is not supported")
+  }
 
   override var shouldAutomaticallyForwardAppearanceMethods: Bool { false }
 
+  // UIKit asks the tab bar controller and then this container, never the
+  // Flutter view controller inside it, so pass these questions on; otherwise
+  // Flutter cannot hide the home indicator or defer edge gestures, e.g. in
+  // the full-screen lyric view.
+  override var childForHomeIndicatorAutoHidden: UIViewController? { children.first }
+
+  override var childForScreenEdgesDeferringSystemGestures: UIViewController? {
+    children.first
+  }
+
   override func viewWillAppear(_ animated: Bool) {
     super.viewWillAppear(animated)
-    if !Self.flutterHasAppeared {
+    if !appearance.hasAppeared {
       children.forEach { $0.beginAppearanceTransition(true, animated: animated) }
     }
   }
 
   override func viewDidAppear(_ animated: Bool) {
     super.viewDidAppear(animated)
-    if !Self.flutterHasAppeared, !children.isEmpty {
+    if !appearance.hasAppeared, !children.isEmpty {
       children.forEach { $0.endAppearanceTransition() }
-      Self.flutterHasAppeared = true
+      appearance.hasAppeared = true
     }
   }
 }
