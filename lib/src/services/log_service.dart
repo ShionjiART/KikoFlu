@@ -69,10 +69,11 @@ class LogService {
   // token、Cookie 等凭据。Dio 的 LogInterceptor 会逐行打印请求头和请求体，
   // 下载日志里的 URL 也带着 ?token=。
   static final List<(RegExp, String Function(Match))> _redactions = [
-    // 请求头：Authorization: Bearer xxx、Cookie: a=b; c=d
+    // 请求头和响应头：Authorization: Bearer xxx、Cookie: a=b; c=d。同名响应头有多个值时
+    // （如多条 Set-Cookie），LogInterceptor 用 \r\n\t 拼在同一条日志里，后面几行也要去掉。
     (
       RegExp(
-        r'\b(authorization|proxy-authorization|cookie|set-cookie)(\s*[:=]\s*)[^\n]+',
+        r'\b(authorization|proxy-authorization|cookie|set-cookie)(\s*[:=]\s*)[^\n]+(?:\n\t[^\n]*)*',
         caseSensitive: false,
       ),
       (m) => '${m[1]}${m[2]}$_redacted',
@@ -88,7 +89,7 @@ class LogService {
     // Map.toString()：{name: foo, password: xxx}
     (
       RegExp(
-        r'\b(password|passwd|token|access_token|refresh_token|api_?key|secret)(\s*:\s*)(?!exists \(|empty\b)[^,}\s][^,}\n]*',
+        r'\b(password|passwd|token|access_token|refresh_token|api_?key|secret)(\s*:\s*)(?!exists\b|empty\b|null\b)[^,}\s][^,}\n]*',
         caseSensitive: false,
       ),
       (m) => '${m[1]}${m[2]}$_redacted',

@@ -15,6 +15,14 @@ void main() {
     );
   });
 
+  test('redacts every value of a multi-value response header', () {
+    // LogInterceptor joins repeated headers such as Set-Cookie with \r\n\t.
+    expect(
+      redact(' set-cookie: a=1; Path=/\r\n\tb=2; Path=/\r\n\tc=3'),
+      ' set-cookie: <redacted>',
+    );
+  });
+
   test('redacts login request and response bodies', () {
     expect(
       redact('{name: alice, password: hunter2}'),
@@ -38,6 +46,8 @@ void main() {
     const lines = [
       '[API] Initialized - host: https://x, token: exists (120 chars)',
       '[API] Initialized - host: https://x, token: empty',
+      '[Auth] Stored token: exists',
+      '[Auth] Stored token: null',
       '开始网络下载: 01.mp3',
       'uri: https://api.example.com/api/works?page=2',
     ];
