@@ -854,8 +854,9 @@ class AudioPlayerService {
     if (_queue.isNotEmpty && _currentIndex < _queue.length - 1) {
       await _switchToIndexAndPlay(_currentIndex + 1);
     } else if (_queue.isNotEmpty && _appLoopMode != LoopMode.off) {
-      // 列表循环和单曲循环时，最后一首的「下一首」回到第一首，
-      // 和自动播完时一致（界面上的按钮在这两种模式下也一直可点）
+      // 列表循环和单曲循环时，界面上的「下一首」一直可点：最后一首手动切到
+      // 下一首时回到第一首（列表循环下与自动播完一致；单曲循环自动播完时
+      // 仍重播当前曲目，只有手动切歌才会换曲）
       await _switchToIndexAndPlay(0);
     } else {
       // No next track available
